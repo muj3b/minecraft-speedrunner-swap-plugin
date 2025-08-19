@@ -1,56 +1,38 @@
 package com.yourname.speedrunnerswap;
 
-import com.yourname.speedrunnerswap.commands.SwapCommand;
-import com.yourname.speedrunnerswap.config.ConfigManager;
-import com.yourname.speedrunnerswap.effects.EffectsManager;
-import com.yourname.speedrunnerswap.game.GameManager;
 import com.yourname.speedrunnerswap.game.GameStateManager;
 import com.yourname.speedrunnerswap.game.SerializableGameState;
-import com.yourname.speedrunnerswap.gui.GuiManager;
 import com.yourname.speedrunnerswap.integration.placeholderapi.SpeedrunnerSwapExpansion;
-import com.yourname.speedrunnerswap.listeners.EventListeners;
-import com.yourname.speedrunnerswap.tracking.TrackerManager;
-import com.yourname.speedrunnerswap.voice.VoiceChatIntegration;
 import org.bukkit.Bukkit;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class SpeedrunnerSwap extends JavaPlugin {
-
-    private static SpeedrunnerSwap instance;
-    private ConfigManager configManager;
-    private GameManager gameManager;
-    private GuiManager guiManager;
-    private TrackerManager trackerManager;
-    private VoiceChatIntegration voiceChatIntegration;
+public class SpeedrunnerSwap extends JavaPlugin {
+    private SwapManager manager;
+    private MuteManager muteManager;
+    private GuiHub guiHub;
     private GameStateManager gameStateManager;
     private EffectsManager effectsManager;
 
-    @Override
-    public void onEnable() {
-        instance = this;
-
-        // Initialize managers
-        this.configManager = new ConfigManager(this);
+    @Override public void onEnable() {
+        saveDefaultConfig();
         this.gameStateManager = new GameStateManager(this);
         this.effectsManager = new EffectsManager(this);
-        this.gameManager = new GameManager(this);
-        this.guiManager = new GuiManager(this);
-        this.trackerManager = new TrackerManager(this);
-        this.voiceChatIntegration = new VoiceChatIntegration(this);
-
-        // Register commands
-        getCommand("swap").setExecutor(new SwapCommand(this));
-
-        // Register event listeners
-        Bukkit.getPluginManager().registerEvents(new EventListeners(this), this);
+        buildManagerFromConfig(); // Builds manager, which might be replaced by loaded state
 
         // Load game state if it exists
         if (gameStateManager.hasSavedState()) {
             SerializableGameState state = gameStateManager.loadState();
             if (state != null) {
-                gameManager.loadGameFromState(state);
+                // Overwrite the default manager with the one loaded from state
+                manager.loadState(state);
             }
         }
+
+        getCommand("swap").setExecutor(new SwapCommand(this));
+        getServer().getPluginManager().registerEvents(manager, this);
+        getServer().getPluginManager().registerEvents(new FreezeGuard(manager), this);
+        getServer().getPluginManager().registerEvents(muteManager, this);
 
         // Hook into PlaceholderAPI
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -58,48 +40,44 @@ public final class SpeedrunnerSwap extends JavaPlugin {
             getLogger().info("Successfully hooked into PlaceholderAPI.");
         }
 
-        // Log startup
-        getLogger().info("SpeedrunnerSwap v" + getDescription().getVersion() + " has been enabled!");
+        getLogger().info("SpeedrunnerSwap v" + getDescription().getVersion() + " enabled.");
     }
 
-    @Override
-    public void onDisable() {
+    @Override public void onDisable() {
         // Save game state if a game is running
-        gameManager.shutdown();
-
-        // Log shutdown
-        getLogger().info("SpeedrunnerSwap has been disabled!");
+        if (manager != null && manager.isRunning()) {
+            gameStateManager.saveState(manager);
+        } else if (manager != null) {
+            // Ensure no state file lingers if game wasn't running
+            gameStateManager.saveState(manager);
+        }
+        HandlerList.unregisterAll(this);
+        getLogger().info("SpeedrunnerSwap disabled.");
     }
 
-    public static SpeedrunnerSwap getInstance() {
-        return instance;
+    public void reloadAndRebuild() {
+        reloadConfig();
+        if (manager != null && manager.isRunning()) manager.pause();
+        HandlerList.unregisterAll(manager);
+        if (muteManager != null) HandlerList.unregisterAll(muteManager);
+        buildManagerFromConfig();
+        getServer().getPluginManager().registerEvents(manager, this);
+        getServer().getPluginManager().registerEvents(new FreezeGuard(manager), this);
+        getServer().getPluginManager().registerEvents(muteManager, this);
     }
 
-    public ConfigManager getConfigManager() {
-        return configManager;
+    private void buildManagerFromConfig() {
+        var c = getConfig();
+        if (muteManager == null) muteManager = new MuteManager(this);
+        manager = new SwapManager(this, c, muteManager);
     }
 
-    public GameManager getGameManager() {
-        return gameManager;
-    }
+    public SwapManager manager() { return manager; }
+    public GameStateManager gameStateManager() { return gameStateManager; }
+    public EffectsManager effectsManager() { return effectsManager; }
 
-    public GuiManager getGuiManager() {
-        return guiManager;
-    }
-
-    public TrackerManager getTrackerManager() {
-        return trackerManager;
-    }
-
-    public VoiceChatIntegration getVoiceChatIntegration() {
-        return voiceChatIntegration;
-    }
-
-    public GameStateManager getGameStateManager() {
-        return gameStateManager;
-    }
-
-    public EffectsManager getEffectsManager() {
-        return effectsManager;
+    public GuiHub guiHub() {
+        if (guiHub == null) guiHub = new GuiHub(this);
+        return guiHub;
     }
 }

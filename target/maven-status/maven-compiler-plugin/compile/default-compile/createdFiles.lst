@@ -1,1 +1,6 @@
-com/yourname/speedrunnerswap/commands/SwapCommand.class
+com/yourname/speedrunnerswap/SafeTeleport.class
+com/yourname/speedrunnerswap/SettingsMenu.class
+com/yourname/speedrunnerswap/util/gson/PotionEffectAdapter.class
+com/yourname/speedrunnerswap/TeamSelectMenu.class
+com/yourname/speedrunnerswap/GuiHub.class
+com/yourname/speedrunnerswap/SpeedrunnerSwap.class

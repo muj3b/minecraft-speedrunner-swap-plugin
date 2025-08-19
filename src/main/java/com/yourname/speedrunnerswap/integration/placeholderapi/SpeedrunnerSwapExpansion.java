@@ -1,7 +1,7 @@
 package com.yourname.speedrunnerswap.integration.placeholderapi;
 
 import com.yourname.speedrunnerswap.SpeedrunnerSwap;
-import com.yourname.speedrunnerswap.game.GameManager;
+import com.yourname.speedrunnerswap.SwapManager;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -22,7 +22,7 @@ public class SpeedrunnerSwapExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getAuthor() {
-        return "Jules"; // Or your name
+        return "Jules";
     }
 
     @Override
@@ -32,31 +32,32 @@ public class SpeedrunnerSwapExpansion extends PlaceholderExpansion {
 
     @Override
     public boolean persist() {
-        return true; // The values may change, but the placeholders are always available.
+        return true;
     }
 
     @Override
     public @Nullable String onPlaceholderRequest(Player player, @NotNull String params) {
-        GameManager gm = plugin.getGameManager();
+        SwapManager sm = plugin.manager();
+        if (sm == null) return "N/A";
 
         switch (params) {
             case "active_runner":
-                if (!gm.isGameRunning()) return "N/A";
-                Player activeRunner = gm.getActiveRunner();
+                if (!sm.isRunning()) return "N/A";
+                Player activeRunner = sm.getActiveRunner();
                 return activeRunner != null ? activeRunner.getName() : "None";
 
             case "time_left":
-                if (!gm.isGameRunning()) return "0";
-                return String.valueOf(gm.getTimeUntilNextSwap());
+                if (!sm.isRunning()) return "0";
+                return String.valueOf(sm.getSecondsLeft());
 
             case "time_left_formatted":
-                if (!gm.isGameRunning()) return "00:00";
-                int seconds = gm.getTimeUntilNextSwap();
+                if (!sm.isRunning()) return "00:00";
+                int seconds = sm.getSecondsLeft();
                 return String.format("%02d:%02d", seconds / 60, seconds % 60);
 
             case "game_status":
-                if (gm.isGameRunning()) {
-                    return gm.isGamePaused() ? "Paused" : "Running";
+                if (sm.isRunning()) {
+                    return sm.isPaused() ? "Paused" : "Running";
                 }
                 return "Stopped";
 
