@@ -1,5 +1,5 @@
 name: SpeedrunnerSwap
-version: '${project.version}'
+version: '3.0.0'
 main: com.yourname.speedrunnerswap.SpeedrunnerSwap
 api-version: '1.20'
 authors: [YourName]
@@ -11,7 +11,7 @@ commands:
     description: Main command for SpeedrunnerSwap plugin
     usage: /<command> [start|stop|pause|resume|status|setrunners|sethunters|reload|gui]
     permission: speedrunnerswap.command
-    
+
 permissions:
   speedrunnerswap.command:
     description: Allows use of all SpeedrunnerSwap commands
