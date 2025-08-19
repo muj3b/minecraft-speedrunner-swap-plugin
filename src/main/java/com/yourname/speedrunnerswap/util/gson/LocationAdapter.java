@@ -57,6 +57,7 @@ public class LocationAdapter extends TypeAdapter<Location> {
             }
         }
         in.endObject();
+        if (world == null) return null; // Or handle world not found error
         return new Location(world, x, y, z, yaw, pitch);
     }
 }

@@ -1,6 +1,5 @@
-package com.yourname.speedrunnerswap.tracking;
+package com.yourname.speedrunnerswap;
 
-import com.yourname.speedrunnerswap.SpeedrunnerSwap;
 import com.yourname.speedrunnerswap.utils.ActionBarUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -12,39 +11,39 @@ import org.bukkit.scoreboard.Team;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
-public class TrackerManager {
+public class HunterTracker {
 
     private final SpeedrunnerSwap plugin;
     private BukkitTask trackerTask;
     private Team glowingTeam;
+    private Player currentTarget;
     private static final String TEAM_NAME = "srswap_glow";
 
-    public TrackerManager(SpeedrunnerSwap plugin) {
+    public HunterTracker(SpeedrunnerSwap plugin) {
         this.plugin = plugin;
     }
 
-    public void startTracking() {
+    public void start() {
         if (trackerTask != null) {
             trackerTask.cancel();
         }
 
-        List<String> modes = plugin.getConfigManager().getTrackerModes();
+        List<String> modes = plugin.getConfig().getStringList("tracker.modes");
         if (modes.isEmpty()) {
-            return; // No tracking modes enabled
+            return;
         }
 
         if (modes.contains("GLOWING")) {
             setupScoreboardTeam();
         }
 
-        int updateTicks = plugin.getConfigManager().getTrackerUpdateTicks();
+        int updateTicks = plugin.getConfig().getInt("tracker.update_ticks", 20);
 
         trackerTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            Player activeRunner = plugin.getGameManager().getActiveRunner();
-            if (activeRunner == null || !activeRunner.isOnline() || !plugin.getGameManager().isGameRunning()) {
+            if (currentTarget == null || !currentTarget.isOnline() || !plugin.manager().isRunning()) {
                 if (modes.contains("GLOWING")) {
-                     // Ensure glowing is turned off if game stops or runner is null
                     if (glowingTeam != null && !glowingTeam.getEntries().isEmpty()) {
                         glowingTeam.getEntries().forEach(entry -> {
                             Player p = Bukkit.getPlayer(entry);
@@ -56,23 +55,27 @@ public class TrackerManager {
             }
 
             if (modes.contains("GLOWING")) {
-                updateGlowing(activeRunner);
+                updateGlowing(currentTarget);
             }
 
-            for (Player hunter : plugin.getGameManager().getHunters()) {
+            for (Player hunter : getHuntersOnline()) {
                 if (hunter != null && hunter.isOnline()) {
                     if (modes.contains("COMPASS")) {
-                        updateCompass(hunter, activeRunner);
+                        updateCompass(hunter, currentTarget);
                     }
                     if (modes.contains("ACTION_BAR")) {
-                        updateActionBar(hunter, activeRunner);
+                        updateActionBar(hunter, currentTarget);
                     }
                 }
             }
         }, 0L, updateTicks);
     }
 
-    public void stopTracking() {
+    public void updateTarget(Player target) {
+        this.currentTarget = target;
+    }
+
+    public void stop() {
         if (trackerTask != null) {
             trackerTask.cancel();
             trackerTask = null;
@@ -86,13 +89,12 @@ public class TrackerManager {
         if (glowingTeam == null) {
             glowingTeam = board.registerNewTeam(TEAM_NAME);
         }
-        glowingTeam.setColor(ChatColor.WHITE); // Color of the glow, can be configured
+        glowingTeam.setColor(ChatColor.WHITE);
         glowingTeam.setCanSeeFriendlyInvisibles(true);
     }
 
     private void cleanupScoreboardTeam() {
         if (glowingTeam != null) {
-            // Make a copy to avoid ConcurrentModificationException
             for (String entry : List.copyOf(glowingTeam.getEntries())) {
                  Player p = Bukkit.getPlayer(entry);
                  if (p != null) p.setGlowing(false);
@@ -101,7 +103,7 @@ public class TrackerManager {
             try {
                 glowingTeam.unregister();
             } catch (IllegalStateException e) {
-                // Team already unregistered, ignore
+                // Ignore
             }
             glowingTeam = null;
         }
@@ -115,7 +117,7 @@ public class TrackerManager {
         }
         activeRunner.setGlowing(true);
 
-        for (Player hunter : plugin.getGameManager().getHunters()) {
+        for (Player hunter : getHuntersOnline()) {
             if (hunter != null && hunter.isOnline() && !glowingTeam.hasEntry(hunter.getName())) {
                 glowingTeam.addEntry(hunter.getName());
             }
@@ -123,7 +125,7 @@ public class TrackerManager {
     }
 
     private void updateCompass(Player hunter, Player activeRunner) {
-        boolean sameWorldRequired = plugin.getConfigManager().isCompassRequiresSameWorld();
+        boolean sameWorldRequired = plugin.getConfig().getBoolean("tracker.compass-requires-same-world", true);
         if (sameWorldRequired && !Objects.equals(hunter.getWorld(), activeRunner.getWorld())) {
             return;
         }
@@ -132,8 +134,15 @@ public class TrackerManager {
 
     private void updateActionBar(Player hunter, Player activeRunner) {
         Location loc = activeRunner.getLocation();
-        String message = "§6§lHUNTER §f| §eTarget: §f" + activeRunner.getName() +
-                " §7(§f" + loc.getBlockX() + "§7, §f" + loc.getBlockY() + "§7, §f" + loc.getBlockZ() + "§7)";
+        String message = String.format("§6§lHUNTER §f| §eTarget: §f%s §7(§f%d§7, §f%d§7, §f%d§7)",
+                activeRunner.getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
         ActionBarUtil.sendActionBar(hunter, message);
+    }
+
+    private List<Player> getHuntersOnline() {
+        return plugin.getConfig().getStringList("hunters").stream()
+                .map(Bukkit::getPlayerExact)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 }

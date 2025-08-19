@@ -2,22 +2,19 @@ package com.yourname.speedrunnerswap.game;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.yourname.speedrunnerswap.PlayerState;
 import com.yourname.speedrunnerswap.SpeedrunnerSwap;
+import com.yourname.speedrunnerswap.SwapManager;
 import com.yourname.speedrunnerswap.util.gson.ItemStackAdapter;
 import com.yourname.speedrunnerswap.util.gson.LocationAdapter;
 import com.yourname.speedrunnerswap.util.gson.PotionEffectAdapter;
-import com.yourname.speedrunnerswap.util.gson.VectorAdapter;
 import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
-import org.bukkit.util.Vector;
-import org.bukkit.entity.Player;
-
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
-import java.util.UUID;
 
 public class GameStateManager {
 
@@ -33,14 +30,13 @@ public class GameStateManager {
                 .registerTypeAdapter(Location.class, new LocationAdapter())
                 .registerTypeAdapter(ItemStack.class, new ItemStackAdapter())
                 .registerTypeAdapter(PotionEffect.class, new PotionEffectAdapter())
-                .registerTypeAdapter(Vector.class, new VectorAdapter())
+                .enableComplexMapKeySerialization()
                 .setPrettyPrinting()
                 .create();
     }
 
-    public void saveState(GameManager gameManager) {
-        if (!gameManager.isGameRunning()) {
-            // If a game is not running, ensure no old state file lingers.
+    public void saveState(SwapManager swapManager) {
+        if (!swapManager.isRunning()) {
             if (stateFile.exists()) {
                 stateFile.delete();
             }
@@ -48,20 +44,18 @@ public class GameStateManager {
         }
 
         SerializableGameState state = new SerializableGameState();
-        state.setRunnerUuids(gameManager.getRunners().stream().map(Player::getUniqueId).collect(Collectors.toList()));
-        state.setHunterUuids(gameManager.getHunters().stream().map(Player::getUniqueId).collect(Collectors.toList()));
-        state.setActiveRunnerIndex(gameManager.getActiveRunnerIndex());
-        state.setRemainingSwapTime(gameManager.getRemainingSwapTimeMillis());
-        state.setPlayerStates(gameManager.getPlayerStates());
-        state.setPaused(gameManager.isGamePaused());
-
+        state.setRunnerUuids(swapManager.getRunnerUuids());
+        state.setHunterNames(swapManager.getHunterNames());
+        state.setActiveRunnerIndex(swapManager.getActiveIndex());
+        state.setSecondsLeft(swapManager.getSecondsLeft());
+        state.setPlayerStates(swapManager.getSharedPlayerStates());
+        state.setPaused(swapManager.isPaused());
 
         try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(stateFile), StandardCharsets.UTF_8))) {
             gson.toJson(state, writer);
             plugin.getLogger().info("Game state saved.");
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save game state to " + stateFile.getName());
-            e.printStackTrace();
+            plugin.getLogger().severe("Could not save game state: " + e.getMessage());
         }
     }
 
@@ -69,19 +63,17 @@ public class GameStateManager {
         if (!stateFile.exists()) {
             return null;
         }
-
         try (Reader reader = new BufferedReader(new InputStreamReader(new FileInputStream(stateFile), StandardCharsets.UTF_8))) {
             SerializableGameState state = gson.fromJson(reader, SerializableGameState.class);
-            plugin.getLogger().info("Game state loaded.");
+            plugin.getLogger().info("Game state loaded from file.");
             return state;
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not load game state from " + stateFile.getName());
-            e.printStackTrace();
+            plugin.getLogger().severe("Could not load game state: " + e.getMessage());
             return null;
         }
     }
 
     public boolean hasSavedState() {
-        return stateFile.exists();
+        return stateFile.exists() && stateFile.length() > 0;
     }
 }
